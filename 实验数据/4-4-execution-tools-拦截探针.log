@@ -1,0 +1,91 @@
+﻿# execution-tools 无效参数与安全拦截探针（复现记录）
+
+==================== 探针1 不支持的语言 ====================
+PS> python cli.py --workspace [WS] code --language brainfuck --code +++
+exit=1
+{
+  "success": false,
+  "status": "error",
+  "language": "brainfuck",
+  "stdout": "",
+  "stderr": "",
+  "stdout_file": null,
+  "stderr_file": null,
+  "returncode": null,
+  "error": "Unsupported language: brainfuck. Supported: bash, c++, cpp, go, java, javascript, js, node, nodejs, php, python, python3, rust, sh, shell, ts, typescript",
+  "compile_output": null,
+  "phase": null,
+  "execution_time": null,
+  "sandbox": null,
+  "verification": "passed"
+}
+
+
+==================== 探针2 Python 语法错误 ====================
+PS> python cli.py --workspace [WS] code --code def broken(: pass
+exit=1
+{
+  "success": false,
+  "error": "Syntax error: Syntax error at line 1: invalid syntax",
+  "verification": "failed",
+  "language": "python"
+}
+
+
+==================== 探针3 路径逃逸（写出工作区） ====================
+PS> python cli.py --workspace [WS] write --path ..\evil.txt --content x
+exit=1
+{
+  "success": false,
+  "error": "Path ..\\evil.txt is outside workspace directory"
+}
+
+
+==================== 探针4 未授权覆盖已存在文件 ====================
+PS> python cli.py --workspace [WS] write --path exist.txt --content new
+exit=0
+{
+  "success": true,
+  "path": "C:\\Users\\Lenovo\\AppData\\Local\\Temp\\exec_probe_ws\\exist.txt",
+  "bytes_written": 3,
+  "verification": "passed"
+}
+
+
+==================== 探针5 edit 搜索未命中 ====================
+PS> python cli.py --workspace [WS] edit --path exist.txt --search nonexistent --replace x
+exit=1
+{
+  "success": false,
+  "error": "Search text not found in file"
+}
+
+
+==================== 探针6 缺少 content 参数 ====================
+PS> python cli.py --workspace [WS] write --path nofile.txt
+exit=2
+python.exe : 错误：请通过 --content 或 --content-file 提供文件内容。
+At C:\Users\Lenovo\AppData\Local\Temp\exec_probes.ps1:16 char:8
++   $r = & $py cli.py --workspace $ws @ToolArgs 2>&1 | Out-String
++        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (错误：请通过 --conten...nt-file 提供文件内容。:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+
+==================== 探针7 危险命令（离线 fail-safe） ====================
+PS> python cli.py --workspace [WS] shell rm -rf C:\Users\Lenovo\AppData\Local\Temp\exec_probe_ws\no_such_dir
+exit=1
+{
+  "success": false,
+  "error": "Command execution not approved: Approval check failed: API key not found for provider 'kimi'. Set KIMI_API_KEY or OPENROUTER_API_KEY."
+}
+
+
+==================== 探针8 未授权覆盖（离线 fail-safe） ====================
+PS> python cli.py --workspace [WS] write --path exist.txt --content new2
+{
+  "success": false,
+  "error": "Overwrite not approved: Approval check failed: API key not found for provider 'kimi'. Set KIMI_API_KEY or OPENROUTER_API_KEY."
+}
+exit=1
